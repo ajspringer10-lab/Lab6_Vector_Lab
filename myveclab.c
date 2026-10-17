@@ -174,7 +174,7 @@ void user_interface(void){
 
 //print_help: Prints valid commands for the calculator
 void print_help(void){
-    printf("Vector Calculator Commands:\n");
+    printf("Vector Calculator Commands (Lab 6 version):\n");
     printf("var = x y z         Create or replace a vector\n");
     printf("var = x,y,z         Commas may also separate values\n");
     printf("var1 + var2         Add 2 vectors\n");
