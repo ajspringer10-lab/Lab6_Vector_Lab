@@ -2,65 +2,74 @@
  * Filename: myvectorarray.c
  * Description: Vector storage functions for vector calculator
  * Author: AJ Springer
- * Date: 10/15/2026
+ * Date: 10/21/2026
  *************************************************/
 
+#include <stdlib.h>
 #include <string.h>
 #include "myvect.h"
 
 //addvect: Adds new vector or replaces vector with same name
-int addvect(vect vectors[], vect newvect){
-    int i;
+int addvect(vect_storage *storage, vect newvect){
     int location;
+    int new_capacity;
+    vect *new_vectors;
 
     //First check if vector name already exists
-    location = findvect(vectors, newvect.name);
+    location = findvect(storage, newvect.name);
 
     if(location >= 0){
-        vectors[location] = newvect;
+        storage->vectors[location] = newvect;
         return 0; //End here if vector exists
     }//end if
 
-    //If not found, put vector in first empty location
-    for(i = 0; i < MAX_VECTORS; i++){
-        if(vectors[i].name[0] == '\0'){
-            vectors[i] = newvect;
-            return 0;
-        }//end if
-    }//end for
+    //If array is full, dynamically increase the storage size
+    if(storage->count >= storage->capacity){
+        if(storage->capacity == 0){
+            new_capacity = START_VECTORS;
+            new_vectors = malloc(new_capacity * sizeof(vect));
+        }else{
+            new_capacity = storage->capacity * 2;
+            new_vectors = realloc(storage->vectors, new_capacity * sizeof(vect));
+        }//end if-else
 
-    //If here, no open array locations were found
-    return -1;
+        //Confirm that memory was allocated correctly
+        if(new_vectors == NULL){
+            return -1;
+        }//end if
+
+        storage->vectors = new_vectors;
+        storage->capacity = new_capacity;
+    }//end if
+
+    //Put new vector at the end of the used storage
+    storage->vectors[storage->count] = newvect;
+    storage->count++;
+
+    return 0;
 }//end addvect
 
-
 //findvect: Searches for a vector name and returns its array location
-int findvect(vect vectors[], char name[]){
+int findvect(vect_storage *storage, char name[]){
     int i;
 
-    for(i = 0; i < MAX_VECTORS; i++){
-		//Confirm that name isn't null first
-        if(vectors[i].name[0] != '\0'){
-			//Check if names match
-            if(strcmp(vectors[i].name, name) == 0){	
-                return i;
-            }//end if
+    for(i = 0; i < storage->count; i++){
+        //Check if names match
+        if(strcmp(storage->vectors[i].name, name) == 0){
+            return i;
         }//end if
     }//end for
 
-	//If here, name couldn't be found, return -1
+    //If here, name couldn't be found, return -1
     return -1;
 }//end findvect
 
 //clearvectors: Clears all vector storage locations
-void clearvectors(vect vectors[]){
-    int i;
+void clearvectors(vect_storage *storage){
+    //Release any dynamically allocated vector memory
+    free(storage->vectors);
 
-	//For each spot, clear vector and x/y/z
-    for(i = 0; i < MAX_VECTORS; i++){
-        vectors[i].name[0] = '\0';
-        vectors[i].x = 0.0;
-        vectors[i].y = 0.0;
-        vectors[i].z = 0.0;
-    }//end for
+    storage->vectors = NULL;
+    storage->count = 0;
+    storage->capacity = 0;
 }//end clearvectors

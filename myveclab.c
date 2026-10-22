@@ -1,9 +1,9 @@
 /**************************************************
  * Filename: myveclab.c
- * Description: User interface for Lab 5 Vector Calculator
+ * Description: User interface for Lab 7 Vector Calculator
  * Author: AJ Springer
- * Date: 10/15/2026
- * If not using makefile: gcc -Wall myveclab.c myvectorarray.c myvectop.c -o myveclab
+ * Date: 10/21/2026
+ * If not using makefile: gcc -Wall myveclab.c myvectorarray.c myvectop.c myvectfile.c -o myveclab
  * If using makefile: make
  * To run: ./myveclab
  * Help: ./myveclab -h
@@ -18,9 +18,9 @@
 void user_interface(void);
 void print_help(void);
 void print_vector(vect value);
-void list_vectors(vect vectors[]);
+void list_vectors(vect_storage *storage);
 int is_number(char value[]);
-int perform_operation(vect vectors[], char first[], char operator[], char second[], vect *result);
+int perform_operation(vect_storage *storage, char first[], char operator[], char second[], vect *result);
 
 int main(int argc, char *argv[]){
     //Run normal calculator with no command line arguments
@@ -29,7 +29,7 @@ int main(int argc, char *argv[]){
     //Print help information when -h is used
     }else if((argc == 2) && (strcmp(argv[1], "-h") == 0)){
         print_help();
-	//Too many arguments entered
+    //Too many arguments entered
     }else{
         printf("Invalid arguments.\n");
         printf("Use ./myveclab -h for help.\n");
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]){
 //user_interface: Gets and processes commands from the user
 void user_interface(void){
     //Declare all variables needed for user interface
-	vect vectors[MAX_VECTORS];
+    vect_storage storage;
     vect newvect;
     vect result;
 
@@ -55,8 +55,10 @@ void user_interface(void){
     int status;
     int running = 1;
 
-    //Ensure we start with all empty vectors
-    clearvectors(vectors);
+    //Ensure we start with empty vector storage
+    storage.vectors = NULL;
+    storage.count = 0;
+    storage.capacity = 0;
 
     while(running == 1){
         printf("minimat> ");
@@ -70,7 +72,7 @@ void user_interface(void){
         token_count = 0;
         token = strtok(user_input, " ,\t\n");
 
-		//Populate tokens array using user input
+        //Fill tokens array with user input
         while((token != NULL) && (token_count < 6)){
             tokens[token_count] = token;
             token_count++;
@@ -87,35 +89,64 @@ void user_interface(void){
             if(strcmp(tokens[0], "quit") == 0){
                 running = 0; //Exit since user wants to quit
             }else if(strcmp(tokens[0], "clear") == 0){
-                clearvectors(vectors);
+                clearvectors(&storage);
                 printf("Vector memory cleared\n");
             }else if(strcmp(tokens[0], "list") == 0){
-                list_vectors(vectors);
+                list_vectors(&storage);
             }else{
-				//Must be find if we made it here
-                location = findvect(vectors, tokens[0]);
+                //Must be find if we made it here
+                location = findvect(&storage, tokens[0]);
                 if(location >= 0){
-                    print_vector(vectors[location]);
+                    print_vector(storage.vectors[location]);
                 }else{
                     printf("Vector %s does not exist\n", tokens[0]);
                 }//end if-else
             }//end if-else
 
+        //Two tokens can be load or save with a filename
+        }else if(token_count == 2){
+            if(strcmp(tokens[0], "load") == 0){
+                status = load_vectors(&storage, tokens[1]);
+
+                if(status >= 0){
+                    printf("%d vector(s) loaded\n", status);
+                    list_vectors(&storage);
+                }else if(status == -1){
+                    printf("File %s does not exist or could not be opened\n", tokens[1]);
+                }else if(status == -2){
+                    printf("File %s is not formatted correctly\n", tokens[1]);
+                }else{
+                    printf("Unable to allocate vector memory\n");
+                }//end if-else
+
+            }else if(strcmp(tokens[0], "save") == 0){
+                status = save_vectors(&storage, tokens[1]);
+
+                if(status == 0){
+                    printf("Vectors saved to %s\n", tokens[1]);
+                }else{
+                    printf("File %s could not be saved\n", tokens[1]);
+                }//end if-else
+
+            }else{
+                printf("Invalid command\n");
+            }//end if-else
+
         //Three tokens should be a math operation
         }else if(token_count == 3){
-            status = perform_operation(vectors, tokens[0], tokens[1], tokens[2], &result);
+            status = perform_operation(&storage, tokens[0], tokens[1], tokens[2], &result);
             if(status == 0){
                 strcpy(result.name, "ans");
                 print_vector(result);
             }else{
-				//Must be invalid
+                //Must be invalid
                 printf("Invalid operation or vector not found\n");
             }//end if-else
 
         //Five tokens can be an assignment or operation with assignment
         }else if((token_count == 5) && (strcmp(tokens[1], "=") == 0)){
-            
-			//Check for direct vector assignment (like a = 1 2 3)
+
+            //Check for direct vector assignment (like a = 1 2 3)
             if(is_number(tokens[2]) && is_number(tokens[3]) && is_number(tokens[4])){
                 //Make sure vector name can fit in structure
                 if(strlen(tokens[0]) >= NAME_SIZE){
@@ -128,34 +159,34 @@ void user_interface(void){
                 newvect.y = atof(tokens[3]);
                 newvect.z = atof(tokens[4]);
 
-                status = addvect(vectors, newvect);
+                status = addvect(&storage, newvect);
                 if(status == 0){
-					//Vectors were able to be added
+                    //Vectors were able to be added
                     print_vector(newvect);
                 }else{
-					//Memory full, couldn't do operation
-                    printf("Vector memory is full\n");
+                    //Dynamic memory couldn't be allocated
+                    printf("Unable to allocate vector memory\n");
                 }//end if-else
 
             //Otherwise try operation with assignment
             //Example: c = a + b
             }else{
-                
-				status = perform_operation(vectors, tokens[2], tokens[3], tokens[4], &result);
-				if(status == 0){
-					//Operation was valid
+
+                status = perform_operation(&storage, tokens[2], tokens[3], tokens[4], &result);
+                if(status == 0){
+                    //Operation was valid
                     if(strlen(tokens[0]) >= NAME_SIZE){
                         printf("Vector name is too long\n");
                         continue;
                     }//end if
 
                     strcpy(result.name, tokens[0]);
-                    status = addvect(vectors, result);
+                    status = addvect(&storage, result);
 
                     if(status == 0){
                         print_vector(result);
                     }else{
-                        printf("Vector memory is full\n");
+                        printf("Unable to allocate vector memory\n");
                     }//end if-else
                 }else{
                     printf("Invalid operation or vector not found\n");
@@ -163,18 +194,20 @@ void user_interface(void){
             }//end if-else
 
         }else{
-			//Command must have been invalid
+            //Command must have been invalid
             printf("Invalid command\n");
         }//end if-else
 
     }//end while
 
-}//end user_interface
+    //Free all dynamic memory before program exits
+    clearvectors(&storage);
 
+}//end user_interface
 
 //print_help: Prints valid commands for the calculator
 void print_help(void){
-    printf("Vector Calculator Commands (Lab 6 version):\n");
+    printf("Vector calculator commands:\n");
     printf("var = x y z         Create or replace a vector\n");
     printf("var = x,y,z         Commas may also separate values\n");
     printf("var1 + var2         Add 2 vectors\n");
@@ -185,7 +218,9 @@ void print_help(void){
     printf("var                 Display a vector\n");
     printf("list                Display all stored vectors\n");
     printf("clear               Clear all stored vectors\n");
-    printf("quit                Exit the program\n");
+    printf("load <name>         Load vectors from a CSV file\n");
+    printf("save <name>         Save vectors to a CSV file\n");
+    printf("quit                Exits the program\n");
     printf("Spaces are required around =, +, -, and *\n");
 }//end print_help
 
@@ -195,15 +230,13 @@ void print_vector(vect value){
 }//end print_vector
 
 //list_vectors: Prints all vectors currently stored
-void list_vectors(vect vectors[]){
+void list_vectors(vect_storage *storage){
     int i;
     int count = 0;
 
-    for(i = 0; i < MAX_VECTORS; i++){
-        if(vectors[i].name[0] != '\0'){
-            print_vector(vectors[i]);
-            count++;
-        }//end if
+    for(i = 0; i < storage->count; i++){
+        print_vector(storage->vectors[i]);
+        count++;
     }//end for
     if(count == 0){
         printf("No vectors are currently stored\n");
@@ -216,6 +249,7 @@ int is_number(char value[]){
     char *endptr;
 
     strtod(value, &endptr);
+	//Must be a number for either of following conditions
     if((value[0] != '\0') && (*endptr == '\0')){
         return 1;
     }//end if
@@ -224,66 +258,66 @@ int is_number(char value[]){
 }//end is_number
 
 //perform_operation: Performs add, subtract, or scalar multiplication
-int perform_operation(vect vectors[], char first[], char operator[], char second[], vect *result){
+int perform_operation(vect_storage *storage, char first[], char operator[], char second[], vect *result){
     int first_location;
     int second_location;
     double scalar;
 
     //Vector addition
     if(strcmp(operator, "+") == 0){
-        first_location = findvect(vectors, first);
-        second_location = findvect(vectors, second);
+        first_location = findvect(storage, first);
+        second_location = findvect(storage, second);
 
         if((first_location < 0) || (second_location < 0)){
-			//Invalid location(s) detected
+            //Invalid location(s) detected
             return -1;
         }//end if
 
-        *result = add(vectors[first_location], vectors[second_location]);
+        *result = add(storage->vectors[first_location], storage->vectors[second_location]);
         return 0;
 
     //Vector subtraction
     }else if(strcmp(operator, "-") == 0){
-        first_location = findvect(vectors, first);
-        second_location = findvect(vectors, second);
+        first_location = findvect(storage, first);
+        second_location = findvect(storage, second);
 
         if((first_location < 0) || (second_location < 0)){
-			//Invalid location(s) detected
+            //Invalid location(s) detected
             return -1;
         }//end if
 
-        *result = subtract(vectors[first_location], vectors[second_location]);
+        *result = subtract(storage->vectors[first_location], storage->vectors[second_location]);
 
         return 0;
 
-    //Scalar multiplication can be vector * number or number * vector
+    //Scalar multiplication (can be vector * number or number * vector)
     }else if(strcmp(operator, "*") == 0){
 
         //First value is the scalar
         if(is_number(first)){
-            second_location = findvect(vectors, second);
+            second_location = findvect(storage, second);
 
             if(second_location < 0){
-				//Invalid location detected
+                //Invalid location detected
                 return -1;
             }//end if
 
             scalar = atof(first);
-            *result = scalar_multiply(vectors[second_location], scalar);
+            *result = scalar_multiply(storage->vectors[second_location], scalar);
 
             return 0;
 
         //Second value is the scalar
         }else if(is_number(second)){
-            first_location = findvect(vectors, first);
+            first_location = findvect(storage, first);
 
             if(first_location < 0){
-				//Invalid location detected
+                //Invalid location detected
                 return -1;
             }//end if
 
             scalar = atof(second);
-            *result = scalar_multiply(vectors[first_location], scalar);
+            *result = scalar_multiply(storage->vectors[first_location], scalar);
 
             return 0;
         }//end if-else
